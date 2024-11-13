@@ -2,13 +2,33 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { User } from '../types';
-import { ChevronRight, Bell, User as UserIcon, Trash2, ArrowLeft, Download } from 'lucide-react';
+import { 
+  ChevronRight, 
+  Bell, 
+  User as UserIcon, 
+  Trash2, 
+  ArrowLeft, 
+  Download,
+  Phone,
+  Share
+} from 'lucide-react';
 import { Alert } from '../components/Alert';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+// Helper function to detect iOS
+const isIOS = () => {
+  return (
+    ['iPad Simulator', 'iPhone Simulator', 'iPod Simulator', 'iPad', 'iPhone', 'iPod'].includes(
+      navigator.platform
+    ) ||
+    // iPad on iOS 13 detection
+    (navigator.userAgent.includes('Mac') && 'ontouchend' in document)
+  );
+};
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -23,12 +43,29 @@ export default function Settings() {
     type: 'success' | 'error' | 'info';
   }>({ show: false, message: '', type: 'info' });
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isIOSDevice] = useState(isIOS());
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Check if app is already installed
+    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+
+    // Listen for the beforeinstallprompt event
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
     });
+
+    // Check if the app's display mode changes
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
+      setIsStandalone(e.matches);
+    };
+    mediaQuery.addEventListener('change', handleDisplayModeChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleDisplayModeChange);
+    };
   }, []);
 
   const handleUpdateName = () => {
@@ -110,12 +147,33 @@ export default function Settings() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          setDeferredPrompt(null);
+          setAlert({
+            show: true,
+            message: 'Installation started successfully',
+            type: 'success'
+          });
+        }
+      } catch{
+        setAlert({
+          show: true,
+          message: 'Failed to start installation',
+          type: 'error'
+        });
       }
     }
+  };
+
+  const handleIOSInstall = () => {
+    setAlert({
+      show: true,
+      message: 'To install: tap the share button below, then select "Add to Home Screen"',
+      type: 'info'
+    });
   };
 
   return (
@@ -215,19 +273,34 @@ export default function Settings() {
           </div>
 
           {/* Installation Section */}
-          {deferredPrompt && (
+          {!isStandalone && (
             <div className="space-y-4">
               <h2 className="text-lg font-display text-gray-900">Installation</h2>
-              <button
-                onClick={handleInstallClick}
-                className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
-              >
-                <div className="flex items-center space-x-3">
-                  <Download className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">Install App</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
-              </button>
+              <div className="space-y-2">
+                {isIOSDevice ? (
+                  <button
+                    onClick={handleIOSInstall}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Phone className="w-5 h-5 text-gray-400" />
+                      <span className="text-gray-600">Add to Home Screen</span>
+                    </div>
+                    <Share className="w-5 h-5 text-gray-400" />
+                  </button>
+                ) : deferredPrompt && (
+                  <button
+                    onClick={handleInstallClick}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Download className="w-5 h-5 text-gray-400" />
+                      <span className="text-gray-600">Install App</span>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
