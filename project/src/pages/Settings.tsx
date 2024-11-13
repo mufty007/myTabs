@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { User } from '../types';
-import { ChevronRight, Bell, User as UserIcon, Trash2, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Bell, User as UserIcon, Trash2, ArrowLeft, Download } from 'lucide-react';
 import { Alert } from '../components/Alert';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -17,6 +22,14 @@ export default function Settings() {
     message: string;
     type: 'success' | 'error' | 'info';
   }>({ show: false, message: '', type: 'info' });
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
 
   const handleUpdateName = () => {
     if (newName.trim() && user) {
@@ -92,6 +105,16 @@ export default function Settings() {
         message: 'Please enable notifications first',
         type: 'error'
       });
+    }
+  };
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
     }
   };
 
@@ -190,6 +213,23 @@ export default function Settings() {
               Test Notification
             </button>
           </div>
+
+          {/* Installation Section */}
+          {deferredPrompt && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-display text-gray-900">Installation</h2>
+              <button
+                onClick={handleInstallClick}
+                className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+              >
+                <div className="flex items-center space-x-3">
+                  <Download className="w-5 h-5 text-gray-400" />
+                  <span className="text-gray-600">Install App</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+          )}
 
           {/* Danger Zone */}
           <div className="space-y-4">
