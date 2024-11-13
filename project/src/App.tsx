@@ -86,10 +86,7 @@ export default function App() {
       prescriptions: [...user.prescriptions, newPrescription]
     };
 
-    await Promise.all([
-      setUser(updatedUser),
-      setHasCompletedOnboarding(true)
-    ]);
+    await Promise.all([setUser(updatedUser), setHasCompletedOnboarding(true)]);
     
     setIsAddModalOpen(false);
   };
@@ -106,23 +103,20 @@ export default function App() {
     {
       path: '/home',
       element: !user || !user.name ? (
-        console.log('Redirecting to onboarding due to missing user/name'),
         <Navigate to="/onboarding" replace />
       ) : !hasCompletedOnboarding ? (
-        console.log('Redirecting to onboarding due to incomplete onboarding'),
         <Navigate to="/onboarding" replace />
       ) : (
-        console.log('Showing home screen'),
         <Home onAddClick={() => setIsAddModalOpen(true)} />
       )
     },
     {
-      path: '/',
-      element: <Navigate to="/home" replace />
-    },
-    {
       path: '/settings',
       element: <Settings />
+    },
+    {
+      path: '/',
+      element: <Navigate to="/home" replace />
     }
   ];
 
@@ -140,6 +134,7 @@ export default function App() {
           </p>
         </div>
       )}
+
       <Routes>
         {routes.map(route => (
           <Route key={route.path} path={route.path} element={route.element} />
@@ -159,6 +154,7 @@ export default function App() {
           </Modal>
         </>
       )}
+
       {deferredPrompt && (
         <button onClick={handleInstallClick}>
           Install App
