@@ -4,7 +4,6 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { User, Prescription } from './types';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
-import SplashScreen from './components/SplashScreen';
 import Onboarding from './pages/Onboarding';
 import BottomNav from './components/BottomNav';
 import { Modal } from './components/Modal';
@@ -23,7 +22,6 @@ declare global {
 }
 
 export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useLocalStorage<User | null>('user', null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useLocalStorage('onboarding_complete', false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -40,22 +38,12 @@ export default function App() {
   }, [user, hasCompletedOnboarding]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js').then(registration => {
-        registration.addEventListener('waiting', () => {
-          if (registration.waiting) {
-            setWaitingWorker(registration.waiting);
-            setIsUpdateAvailable(true);
-          }
-        });
+        if (registration.waiting) {
+          setWaitingWorker(registration.waiting);
+          setIsUpdateAvailable(true);
+        }
       });
     }
   }, []);
@@ -83,10 +71,6 @@ export default function App() {
     
     setDeferredPrompt(null);
   };
-
-  if (isLoading) {
-    return <SplashScreen />;
-  }
 
   const handleAddPrescription = async (prescription: Prescription) => {
     if (!user) return;
