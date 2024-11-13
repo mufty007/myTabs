@@ -15,6 +15,13 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+// Add this type declaration before the App component
+declare global {
+  interface WindowEventMap {
+    beforeinstallprompt: BeforeInstallPromptEvent;
+  }
+}
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useLocalStorage<User | null>('user', null);
@@ -54,10 +61,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
+    window.addEventListener('beforeinstallprompt', (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
-      // Save the event so it can be triggered later
       setDeferredPrompt(e);
     });
   }, []);
@@ -71,14 +76,11 @@ export default function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     
-    // Show the install prompt
     deferredPrompt.prompt();
     
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
     
-    // Clear the saved prompt since it can't be used again
     setDeferredPrompt(null);
   };
 
