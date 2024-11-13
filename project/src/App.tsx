@@ -10,6 +10,11 @@ import BottomNav from './components/BottomNav';
 import { Modal } from './components/Modal';
 import AddPrescription from './pages/AddPrescription';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useLocalStorage<User | null>('user', null);
@@ -17,6 +22,7 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     console.log('App state updated:', {
@@ -47,10 +53,33 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Save the event so it can be triggered later
+      setDeferredPrompt(e);
+    });
+  }, []);
+
   const reloadPage = () => {
     waitingWorker?.postMessage({ type: 'SKIP_WAITING' });
     setIsUpdateAvailable(false);
     window.location.reload();
+  };
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    // Show the install prompt
+    deferredPrompt.prompt();
+    
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    
+    // Clear the saved prompt since it can't be used again
+    setDeferredPrompt(null);
   };
 
   if (isLoading) {
@@ -143,6 +172,11 @@ export default function App() {
             />
           </Modal>
         </>
+      )}
+      {deferredPrompt && (
+        <button onClick={handleInstallClick}>
+          Install App
+        </button>
       )}
     </div>
   );
