@@ -5,6 +5,7 @@ import { formatTime } from '../utils/dateTime';
 
 interface PrescriptionDetailModalProps {
   prescription: Prescription;
+  time: string;
   onClose: () => void;
   onDelete: (id: string) => void;
   onEdit: (prescription: Prescription) => void;
@@ -12,6 +13,7 @@ interface PrescriptionDetailModalProps {
 
 export function PrescriptionDetailModal({
   prescription,
+  time,
   onClose,
   onDelete,
   onEdit
@@ -50,6 +52,7 @@ export function PrescriptionDetailModal({
             <Clock className="w-5 h-5" />
             <div>
               <p className="font-medium">Schedule</p>
+              <p className="text-sm">Next dose: {time}</p>
               {prescription.times.map((t, i) => (
                 <p key={i} className="text-sm">{formatTime(t)}</p>
               ))}
