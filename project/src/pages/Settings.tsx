@@ -10,7 +10,8 @@ import {
   ArrowLeft, 
   Download,
   Phone,
-  Share
+  Share,
+  Plus
 } from 'lucide-react';
 import { Alert } from '../components/Alert';
 
@@ -30,6 +31,12 @@ const isIOS = () => {
   );
 };
 
+// Helper function to check if the app is in standalone mode
+const isInStandaloneMode = () => 
+  window.matchMedia('(display-mode: standalone)').matches || 
+  (window.navigator as any).standalone || 
+  document.referrer.includes('android-app://');
+
 export default function Settings() {
   const navigate = useNavigate();
   const [user, setUser] = useLocalStorage<User | null>('user', null);
@@ -45,16 +52,23 @@ export default function Settings() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOSDevice] = useState(isIOS());
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
 
   useEffect(() => {
-    // Check if app is already installed
-    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+    const checkStandaloneStatus = () => {
+      setIsStandalone(isInStandaloneMode());
+    };
+
+    // Initial check
+    checkStandaloneStatus();
 
     // Listen for the beforeinstallprompt event
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
-    });
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     // Check if the app's display mode changes
     const mediaQuery = window.matchMedia('(display-mode: standalone)');
@@ -63,7 +77,9 @@ export default function Settings() {
     };
     mediaQuery.addEventListener('change', handleDisplayModeChange);
 
+    // Cleanup
     return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       mediaQuery.removeEventListener('change', handleDisplayModeChange);
     };
   }, []);
@@ -117,7 +133,6 @@ export default function Settings() {
       });
     }
   };
-
   const handleTestNotification = async () => {
     if (!('Notification' in window)) {
       setAlert({
@@ -158,7 +173,7 @@ export default function Settings() {
             type: 'success'
           });
         }
-      } catch{
+      } catch (error) {
         setAlert({
           show: true,
           message: 'Failed to start installation',
@@ -169,9 +184,10 @@ export default function Settings() {
   };
 
   const handleIOSInstall = () => {
+    setShowInstallInstructions(true);
     setAlert({
       show: true,
-      message: 'To install: tap the share button below, then select "Add to Home Screen"',
+      message: 'To install: tap the share button in your browser, then select "Add to Home Screen"',
       type: 'info'
     });
   };
@@ -272,37 +288,50 @@ export default function Settings() {
             </button>
           </div>
 
-          {/* Installation Section */}
-          {!isStandalone && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-display text-gray-900">Installation</h2>
-              <div className="space-y-2">
-                {isIOSDevice ? (
+          {/* Installation Section - Modified to always show with appropriate content */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-display text-gray-900">Installation</h2>
+            <div className="space-y-2">
+              {isStandalone ? (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-gray-600">App is already installed</p>
+                </div>
+              ) : isIOSDevice ? (
+                <>
                   <button
                     onClick={handleIOSInstall}
                     className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
                   >
                     <div className="flex items-center space-x-3">
-                      <Phone className="w-5 h-5 text-gray-400" />
+                      <Plus className="w-5 h-5 text-gray-400" />
                       <span className="text-gray-600">Add to Home Screen</span>
                     </div>
                     <Share className="w-5 h-5 text-gray-400" />
                   </button>
-                ) : deferredPrompt && (
-                  <button
-                    onClick={handleInstallClick}
-                    className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Download className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-600">Install App</span>
+                  {showInstallInstructions && (
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
+                        <li>Tap the share button in your browser</li>
+                        <li>Scroll down and tap "Add to Home Screen"</li>
+                        <li>Tap "Add" to confirm</li>
+                      </ol>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                  </button>
-                )}
-              </div>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={handleInstallClick}
+                  className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+                >
+                  <div className="flex items-center space-x-3">
+                    <Download className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-600">Install App</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                </button>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Danger Zone */}
           <div className="space-y-4">
