@@ -15,6 +15,8 @@ export default function App() {
   const [user, setUser] = useLocalStorage<User | null>('user', null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useLocalStorage('onboarding_complete', false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+  const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
 
   useEffect(() => {
     console.log('App state updated:', {
@@ -31,6 +33,25 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').then(registration => {
+        registration.addEventListener('waiting', () => {
+          if (registration.waiting) {
+            setWaitingWorker(registration.waiting);
+            setIsUpdateAvailable(true);
+          }
+        });
+      });
+    }
+  }, []);
+
+  const reloadPage = () => {
+    waitingWorker?.postMessage({ type: 'SKIP_WAITING' });
+    setIsUpdateAvailable(false);
+    window.location.reload();
+  };
 
   if (isLoading) {
     return <SplashScreen />;
@@ -92,6 +113,18 @@ export default function App() {
 
   return (
     <div className="pb-16">
+      {isUpdateAvailable && (
+        <div className="fixed top-0 left-0 right-0 bg-blue-500 text-white p-2 text-center">
+          <p>New version available! 
+            <button 
+              onClick={reloadPage}
+              className="ml-2 underline"
+            >
+              Update now
+            </button>
+          </p>
+        </div>
+      )}
       <Routes>
         {routes.map(route => (
           <Route key={route.path} path={route.path} element={route.element} />
