@@ -9,15 +9,19 @@ import {
   Trash2, 
   ArrowLeft, 
   Download,
-  Phone,
   Share,
-  Plus
 } from 'lucide-react';
 import { Alert } from '../components/Alert';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+declare global {
+  interface WindowEventMap {
+    beforeinstallprompt: BeforeInstallPromptEvent;
+  }
 }
 
 // Helper function to detect iOS
@@ -30,12 +34,6 @@ const isIOS = () => {
     (navigator.userAgent.includes('Mac') && 'ontouchend' in document)
   );
 };
-
-// Helper function to check if the app is in standalone mode
-const isInStandaloneMode = () => 
-  window.matchMedia('(display-mode: standalone)').matches || 
-  (window.navigator as any).standalone || 
-  document.referrer.includes('android-app://');
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -51,36 +49,46 @@ export default function Settings() {
   }>({ show: false, message: '', type: 'info' });
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOSDevice] = useState(isIOS());
+  const [isInstallable, setIsInstallable] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
 
   useEffect(() => {
-    const checkStandaloneStatus = () => {
-      setIsStandalone(isInStandaloneMode());
+    // Check if app is already installed
+    const checkStandalone = () => {
+      const isStandaloneMode = 
+        window.matchMedia('(display-mode: standalone)').matches || 
+        ('standalone' in window.navigator && (window.navigator as Navigator & { standalone: boolean }).standalone);
+      setIsStandalone(isStandaloneMode);
     };
 
-    // Initial check
-    checkStandaloneStatus();
+    checkStandalone();
 
     // Listen for the beforeinstallprompt event
-    const handleBeforeInstallPrompt = (e: Event) => {
+    const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
+      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      // Stash the event so it can be triggered later
+      setDeferredPrompt(e);
+      // Update UI to show the install button
+      setIsInstallable(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Check if the app's display mode changes
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
-      setIsStandalone(e.matches);
-    };
-    mediaQuery.addEventListener('change', handleDisplayModeChange);
+    // Listen for successful install
+    window.addEventListener('appinstalled', () => {
+      setDeferredPrompt(null);
+      setIsInstallable(false);
+      setIsStandalone(true);
+      setAlert({
+        show: true,
+        message: 'App was successfully installed!',
+        type: 'success'
+      });
+    });
 
-    // Cleanup
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      mediaQuery.removeEventListener('change', handleDisplayModeChange);
     };
   }, []);
 
@@ -117,7 +125,8 @@ export default function Settings() {
             type: 'error'
           });
         }
-      } catch {
+      } catch (err) {
+        console.error(err);
         setAlert({
           show: true,
           message: 'Failed to enable notifications',
@@ -133,6 +142,7 @@ export default function Settings() {
       });
     }
   };
+
   const handleTestNotification = async () => {
     if (!('Notification' in window)) {
       setAlert({
@@ -161,35 +171,37 @@ export default function Settings() {
   };
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          setDeferredPrompt(null);
-          setAlert({
-            show: true,
-            message: 'Installation started successfully',
-            type: 'success'
-          });
-        }
-      } catch (error) {
+    if (!deferredPrompt) {
+      setAlert({
+        show: true,
+        message: isIOSDevice 
+          ? 'Please use the share button in your browser and select "Add to Home Screen"' 
+          : 'Installation is not available at this time',
+        type: 'info'
+      });
+      return;
+    }
+
+    try {
+      await deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      
+      if (choiceResult.outcome === 'accepted') {
         setAlert({
           show: true,
-          message: 'Failed to start installation',
-          type: 'error'
+          message: 'Thank you for installing our app!',
+          type: 'success'
         });
       }
+      setDeferredPrompt(null);
+    } catch (err) {
+      console.error(err);
+      setAlert({
+        show: true,
+        message: 'There was an error installing the app',
+        type: 'error'
+      });
     }
-  };
-
-  const handleIOSInstall = () => {
-    setShowInstallInstructions(true);
-    setAlert({
-      show: true,
-      message: 'To install: tap the share button in your browser, then select "Add to Home Screen"',
-      type: 'info'
-    });
   };
 
   return (
@@ -288,50 +300,48 @@ export default function Settings() {
             </button>
           </div>
 
-          {/* Installation Section - Modified to always show with appropriate content */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-display text-gray-900">Installation</h2>
-            <div className="space-y-2">
-              {isStandalone ? (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-gray-600">App is already installed</p>
-                </div>
-              ) : isIOSDevice ? (
-                <>
-                  <button
-                    onClick={handleIOSInstall}
-                    className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Plus className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-600">Add to Home Screen</span>
-                    </div>
-                    <Share className="w-5 h-5 text-gray-400" />
-                  </button>
-                  {showInstallInstructions && (
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
-                        <li>Tap the share button in your browser</li>
-                        <li>Scroll down and tap "Add to Home Screen"</li>
-                        <li>Tap "Add" to confirm</li>
-                      </ol>
-                    </div>
-                  )}
-                </>
-              ) : (
+          {/* Installation Section */}
+          {!isStandalone && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-display text-gray-900">Installation</h2>
+              {isIOSDevice ? (
                 <button
-                  onClick={handleInstallClick}
+                  onClick={() => {
+                    setAlert({
+                      show: true,
+                      message: 'To install: tap the share button below, then select "Add to Home Screen"',
+                      type: 'info'
+                    });
+                  }}
                   className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
                 >
                   <div className="flex items-center space-x-3">
-                    <Download className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-600">Install App</span>
+                    <Share className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-600">Add to Home Screen</span>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-400" />
                 </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleInstallClick}
+                    className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Download className="w-5 h-5 text-gray-400" />
+                      <span className="text-gray-600">Install App</span>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  </button>
+                  {!isInstallable && (
+                    <p className="text-sm text-gray-500 px-4">
+                      To install, please use Chrome or Edge on desktop, or any modern browser on Android
+                    </p>
+                  )}
+                </>
               )}
             </div>
-          </div>
+          )}
 
           {/* Danger Zone */}
           <div className="space-y-4">
